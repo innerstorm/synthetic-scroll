@@ -193,4 +193,5 @@ section p {
     top: 0;
     left: 0;
     border-radius: 3px;
+    user-select: none;
 }

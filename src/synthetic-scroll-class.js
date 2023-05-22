@@ -1,139 +1,163 @@
 class SyntheticScroll {
     constructor(element) {
+      // properties
+      // ----------
+  
+      // scrollBox element
+      this.scrollBox = element.querySelector("#scrollBox");
+  
+      // scrollbar element
+      this.scrollBar = element.querySelector("#scrollBar");
+  
+      // we have a mousedown on our scrollbar
+      this.isScrollBarPressed = false;
+  
+      // status for scrollstop (from Deck terminology)
+      // 0 - not stopped yet,
+      // 1 - stopped
+      // 2 - after stopped
+      this.blockedStatus = 0;
+  
+      this.blockerElement = '';
+  
+      // variation for scroll speed
+      // pageScrollPos += scrollStep * wheelDeltaY;
+      this.scrollStep = 1;
+  
+      // absolute pixel postion of the scrollBar
+      this.scrollBarPosition = 0;
+  
+      // pixel height of the scrollbar
+      this.scrollBarHeight = 0;
+  
+      // exact px amount of scroll offset of the page
+      this.pageScrollPos = 0;
+      this.newPageScrollPos = 0;
+      this.oldPageScrollPos = 0;
+  
+      // event handlers
+      // --------------
+      // init on page load
+      window.addEventListener("load", (ev) => this.onPageLoad(ev));
+  
+      // on page resize
+      window.addEventListener("resize", (ev) => this.onPageResize(ev));
 
-        // properties
-        // ----------
+      // on scrolling with wheel
+      document.addEventListener("wheel", (ev) => this.onMouseWheel(ev), {
+        passive: false
+      });
+  
+      // on mouse move
+      window.addEventListener("mousemove", (ev) => this.onMouseMove(ev));
 
-        // scrollBox element
-        this.scrollBox = element.querySelector("#scrollBox");
+      // on mouse down
+      this.scrollBar.addEventListener("mousedown", (ev) => this.onMouseDown(ev));
+  
+      // on mouse up
+      window.addEventListener("mouseup", (ev) => this.onMouseUp(ev));
+  
+      // click on scroll box
+      this.scrollBox.addEventListener("click", (ev) => this.onScrollBoxClick(ev));
 
-        // scrollbar element
-        this.scrollBar = element.querySelector("#scrollBar");
+      // broadcasters
+      // reciever
+      this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
+  
+      // broadcaster
+      this.syntheticScrollData = new BroadcastChannel("syntetic-scroll-data");
 
-        // we have a mousedown on our scrollbar
-        this.isScrollBarPressed = false;
+      this.animationLengthReceiver = new BroadcastChannel("animation-length");
 
-        // status for scrollstop (from Deck terminology)
-        // 0 - not stopped yet, 
-        // 1 - stopped
-        // 2 - after stopped
-        this.blockedStatus = 0;
-
-        // variatior for scroll speed
-        // pageScrollPos += scrollStep * wheelDeltaY;
-        this.scrollStep = 24;
-
-        // absolute pixel postion of the scrollBar
-        this.scrollBarPosition = 0;
-
-        // pixel height of the scrollbar
-        this.scrollBarHeight = 0;
-
-        // exact px amount of scroll offset of the page
-        this.pageScrollPos = 0;
-
-
-        // event handlers
-        // --------------
-        // on scrolling with wheel
-        document.addEventListener("wheel", (ev) => this.onMouseWheel(ev), { passive: false });
-
-        // on mouse move
-        window.addEventListener("mousemove", (ev) => this.onMouseMove(ev));
-
-        // on mouse up
-        window.addEventListener("mouseup", (ev) => this.onMouseUp(ev));
-
-        // init on page load
-        window.addEventListener("load", (ev) => this.onPageLoad(ev));
-
-        // on page resize
-        window.addEventListener("resize", (ev) => this.onPageResize(ev));
-
-        // click on scroll box
-        this.scrollBox.addEventListener("click", (ev) => this.onScrollBoxClick(ev));
-
-        // on mouse down 
-        this.scrollBar.addEventListener("mousedown", (ev) => this.onMouseDown(ev));
-
-        // broadcasters
-        // reciever
-        this.pageStatusReciever = new BroadcastChannel("page-status");
-
-        // broadcaster
-        this.syntheticScrollData = new BroadcastChannel("scroll-data");
-
+       //
+       this.animationLengthReceiver.addEventListener("message", (ev) => {
+        this.extraPageHeight = ev.data;
+      });
     }
-
-
+  
     // events
     // ------
     // window: on page load we init the size/pos of the scrollbar
     // and set a listener for blocked status broadcast
     onPageLoad() {
-        this.updateScrollBarSize();
-        this.updateScrollBarPosition(this.pageScrollPos);
-
-        // when somebody sends a "BLOCK/DEBLOCK PAGE" message, 
-        // we update our blocked state
-        this.pageStatusReciever.onmessage = (ev) => {
-            this.blockedStatus = ev.data;
-        }
+      this.scrollRestore();
+      this.updateScrollBarSize();
+      this.updateScrollBarPosition(this.pageScrollPos);
     }
 
-    // window: on window resize we update 
+    // window: on window resize we update
     // the scrollbar's size and position
     onPageResize() {
-        this.updateScrollBarSize();
-        this.updateScrollBarPosition(this.pageScrollPos);
-    }
-
-    // scrollbar: scrollbar is pressed
-    onMouseDown() {
-        this.isScrollBarPressed = true;
-    }
-
-    // window: scrollbar is not pressed anymore
-    onMouseUp() {
-        this.isScrollBarPressed = false;
-    }
-
-    // window: while holding the scrollbar we move the mouse, 
-    // update page scroll 
-    // update scrollbar pos
-    onMouseMove(ev) {
-        // move the mouse on the scrollbar while the page is NOT blocked
-        // so we replicate classic scrolling behavior
-        if (this.isScrollBarPressed && this.blockedStatus !== 1) {
-            this.updateAllByMousePosition(ev);
-        }
-
-        // when scrolling with scrollbar 
-        // we update scrolling data programatically all the time
-        if (this.isScrollBarPressed) {
-            // TODO:
-        }
-    }
-
-    // scrollBox: clicking anywhere on scrollbox updates the scrollbar's position
-    // and page's scroll position
-    onScrollBoxClick(ev) {
-        if (ev.target === this.scrollBox) {
-            this.updateAllByMousePosition(ev);
-        }
+      this.updateScrollBarSize();
+      this.updateScrollBarPosition(this.pageScrollPos);
     }
 
     // document: on mouse wheel event
     onMouseWheel(ev) {
+      this.getNewData(ev);
+    }
+
+    // window: while holding the scrollbar we move the mouse,
+    // update page scroll
+    // update scrollbar pos
+    onMouseMove(ev) {
+        // move the mouse on the scrollbar while the page is NOT blocked
+        // so we replicate classic scrolling behavior
+        if (this.isScrollBarPressed ) {
+            this.getNewData(ev);
+            // if( this.blockedStatus !== 1 ) {
+            //     this.updateAllByMousePosition(ev);
+            // }
+        }
+    }
+  
+    // scrollbar: scrollbar is pressed
+    onMouseDown() {
+      this.isScrollBarPressed = true;
+    }
+  
+    // window: scrollbar is not pressed anymore
+    onMouseUp() {
+      this.isScrollBarPressed = false;
+    }
+  
+    // scrollBox: clicking anywhere on scrollbox updates the scrollbar's position
+    // and page's scroll position
+    onScrollBoxClick(ev) {
+      if (ev.target === this.scrollBox) {
+        this.getNewData(ev);
+        this.updateAllByMousePosition(ev);
+      }
+    }
+
+    async getNewData(ev) {
         ev.preventDefault();
+        
+        // delta needs to be calculated by deltaY on wheel or by the mouse movement
+        let delta;
+
+        if (ev.type === 'wheel') { 
+            console.log('1. Delta:: ', ev.deltaY);
+            delta = ev.deltaY;
+        } else {        
+            this.newPageScrollPos = this.getNewPageScrollPos(ev);
+            delta = this.newPageScrollPos - this.oldPageScrollPos;
+            delta = (this.blockedStatus !== 1) ? delta : 2 * delta;
+            this.oldPageScrollPos = this.newPageScrollPos;
+        }
+
+        try {
+            this.blockedStatus = await this.waitForData(ev, delta);
+        } catch (error) {
+            console.error("Error occurred:", error);
+        }
 
         // the page is not blocked
         if (this.blockedStatus !== 1) {
-            const deltaY = Math.sign(ev.deltaY);
-
-            // define new page scroll position by wheel delta 
+            // define new page scroll position by wheel delta
             // and a multiplier for better control off scrollspeed
-            this.pageScrollPos += this.scrollStep * deltaY;
+            this.pageScrollPos += this.scrollStep * delta;
+            console.log('5. SCROLLBAR MOVED - this.pageScrollPos', this.pageScrollPos, ' - delta ', delta);
 
             // stop at the top if somehow on earth the position becomes negative (sic!)
             if (this.pageScrollPos < 0) {
@@ -145,79 +169,135 @@ class SyntheticScroll {
                 this.pageScrollPos = this.getMaxPageScrollPos();
             }
 
-            // finally scroll to the new position
-            window.scrollTo({ top: this.pageScrollPos });
+            const offsetTopBlocker = this.blockerElement.getBoundingClientRect().top + document.documentElement.scrollTop;
+            console.log('offsetTopBlocker : ', offsetTopBlocker);
+            if (this.blockedStatus === 0 && offsetTopBlocker < this.pageScrollPos) {
+                // finally scroll to the new position
+                window.scrollTo({ top: offsetTopBlocker });
+            } else if (this.blockedStatus === 2 && offsetTopBlocker > this.pageScrollPos) {
+                // finally scroll to the new position
+                window.scrollTo({ top: offsetTopBlocker })
+            } else {
+                window.scrollTo({ top: this.pageScrollPos });
+            }
+
+            
 
             // update scrollbar according new psge scroll position
             this.updateScrollBarPosition(this.pageScrollPos);
-        }
+        }        
+        
+        return delta;
+    }
 
-        // broadcast message to world to hear that
-        // we have a new scroll position
-        this.syntheticScrollData.postMessage({
-            type: "wheel",
-            deltaY: Math.round(ev.deltaY)
+    //wait for the broadcast communication
+    waitForData(ev, delta) {
+        console.log('2. Wait data:: ');
+        // const scrollTop = this.pageScrollPos;// + this.scrollStep * delta;
+
+        return new Promise((resolve) => {
+          this.syntheticScrollData.postMessage({
+            evType: ev.type,
+            deltaY: Math.round(delta),
+            scrollTop: this.pageScrollPos
+          });
+    
+          // when somebody sends a "BLOCK/DEBLOCK PAGE" message,
+          // we update our blocked state
+          this.pageStatusReciever.addEventListener("message", (ev) => {
+              this.blockedStatus = ev.data.blockedStatus;
+              this.blockerElement = document.getElementById(ev.data.blockerElement);
+
+              resolve(this.blockedStatus);
+          });
         });
     }
 
+    getNewPageScrollPos(ev) {
+        return Math.round(this.getScrollRatio(ev) * this.getMaxPageScrollPos());
+    }
+
+    // calculate scrolling ratio depending on event 
+    // on mouse movement we calculate ratio
+    getScrollRatio(ev) {
+        let ratio;
+
+        if (ev.type === 'mousemove' || ev.type === 'click') {
+            ratio = ev.clientY / scrollBox.offsetHeight;
+        } else {
+            ratio = this.pageScrollPos / this.getMaxPageScrollPos();
+        }
+ 
+        return ratio;
+    }
+  
     // updaters
     // --------
     // update scrollbar size by content and screen height ratio
     updateScrollBarSize() {
-
-        // percent of window height to content height
-        const barHeightPercent =
-            (window.innerHeight / document.body.scrollHeight) * 100;
-        // calculate the height of the bar by the content height
-        this.scrollBarHeight = Math.round((this.scrollBox.offsetHeight * barHeightPercent) / 100);
-        // apply css for scrollbar height
-        this.scrollBar.style.height = `${this.scrollBarHeight}px`;
+      // percent of window height to content height
+      const barHeightPercent =
+        (window.innerHeight / document.body.scrollHeight) * 100;
+      // calculate the height of the bar by the content height
+      this.scrollBarHeight = Math.round(
+        (this.scrollBox.offsetHeight * barHeightPercent) / 100
+      );
+      // apply css for scrollbar height
+      this.scrollBar.style.height = `${this.scrollBarHeight}px`;
     }
-
-
+  
     // update scrollbar position
     updateScrollBarPosition(newPosPx) {
-        // update scrollbar position px
-        this.scrollBarPosition = Math.round(
-            (newPosPx / this.getMaxPageScrollPos()) *
-            (this.scrollBox.offsetHeight - this.scrollBarHeight)
-        );
-
-        // set scrollbar element's new position
-        this.applyScrollBarPosition(this.scrollBarPosition)
+      // update scrollbar position px
+      this.scrollBarPosition = Math.round(
+        (newPosPx / this.getMaxPageScrollPos()) *
+        (this.scrollBox.offsetHeight - this.scrollBarHeight)
+      );
+  
+      // set scrollbar element's new position
+      this.applyScrollBarPosition(this.scrollBarPosition);
     }
-
-
+  
     // the major update function that updates all and all
     updateAllByMousePosition(ev) {
-        const scrollOffsetPercent = ev.clientY / this.scrollBox.offsetHeight;
-
-        this.pageScrollPos = Math.round(scrollOffsetPercent * this.getMaxPageScrollPos());
-
         // set page scroll position to the newly calculated pos
         window.scrollTo(0, this.pageScrollPos);
-
+    
         // update scrollbar position
         if (this.blockedStatus !== 1) {
-            this.scrollBarPosition = Math.round(scrollOffsetPercent * (this.scrollBox.offsetHeight - this.scrollBarHeight));
+            const scrollOffsetPercent = this.getScrollRatio(ev);
+            this.scrollBarPosition = Math.round(
+            scrollOffsetPercent *
+                (this.scrollBox.offsetHeight - this.scrollBarHeight)
+            );
             // place the scrollbar according to the click on the scrollbox
             this.applyScrollBarPosition(this.scrollBarPosition);
         }
     }
-
-
+  
     // helpers
     // -------
     // set css of the scrollbar pos
     applyScrollBarPosition(posPx) {
-        this.scrollBar.style.top = `${posPx}px`;
+      this.scrollBar.style.top = `${posPx}px`;
     }
-
+  
     // the max scroll position is body height - one page height
     getMaxPageScrollPos() {
-        return document.body.scrollHeight - window.innerHeight;
+      return document.body.scrollHeight - window.innerHeight;
     }
-}
 
-// BRING IT ALIVE!!!
-const syntheticScroll = new SyntheticScroll(document.body);
+    //Scroll retsoration on page load
+    scrollRestore() {
+      // This prevents the page from scrolling down to where it was previously.
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+      
+      window.scrollTo(0,0);
+    }
+  }
+  
+  // BRING IT ALIVE!!!
+  const syntheticScroll = new SyntheticScroll(document.body);
+  
