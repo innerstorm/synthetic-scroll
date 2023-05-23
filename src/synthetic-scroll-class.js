@@ -17,8 +17,7 @@ class SyntheticScroll {
       // 1 - stopped
       // 2 - after stopped
       this.blockedStatus = 0;
-  
-      this.blockerElement = '';
+      this.offsetTopBlocker = 400;
   
       // variation for scroll speed
       // pageScrollPos += scrollStep * wheelDeltaY;
@@ -60,10 +59,7 @@ class SyntheticScroll {
       // click on scroll box
       this.scrollBox.addEventListener("click", (ev) => this.onScrollBoxClick(ev));
 
-      // broadcasters
-      // reciever
-      this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
-  
+       
       // broadcaster
       this.syntheticScrollData = new BroadcastChannel("syntetic-scroll-data");
 
@@ -148,9 +144,12 @@ class SyntheticScroll {
 
         try {
             this.blockedStatus = await this.waitForData(ev, delta);
+            console.log('after wait data status ', this.blockedStatus);
         } catch (error) {
             console.error("Error occurred:", error);
         }
+
+        console.log('this.blockedStatus = ', this.blockedStatus);
 
         // the page is not blocked
         if (this.blockedStatus !== 1) {
@@ -169,14 +168,13 @@ class SyntheticScroll {
                 this.pageScrollPos = this.getMaxPageScrollPos();
             }
 
-            const offsetTopBlocker = this.blockerElement.getBoundingClientRect().top + document.documentElement.scrollTop;
-            console.log('offsetTopBlocker : ', offsetTopBlocker);
-            if (this.blockedStatus === 0 && offsetTopBlocker < this.pageScrollPos) {
+            // const offsetTopBlocker = this.blockerElement.getBoundingClientRect().top + document.documentElement.scrollTop;
+            if (this.blockedStatus === 0 && this.offsetTopBlocker < this.pageScrollPos) {
                 // finally scroll to the new position
-                window.scrollTo({ top: offsetTopBlocker });
-            } else if (this.blockedStatus === 2 && offsetTopBlocker > this.pageScrollPos) {
+                window.scrollTo({ top: this.offsetTopBlocker });
+            } else if (this.blockedStatus === 2 && this.offsetTopBlocker > this.pageScrollPos) {
                 // finally scroll to the new position
-                window.scrollTo({ top: offsetTopBlocker })
+                window.scrollTo({ top: this.offsetTopBlocker })
             } else {
                 window.scrollTo({ top: this.pageScrollPos });
             }
@@ -190,27 +188,53 @@ class SyntheticScroll {
         return delta;
     }
 
-    //wait for the broadcast communication
+
+    // wait for the broadcast communication
     waitForData(ev, delta) {
         console.log('2. Wait data:: ');
-        // const scrollTop = this.pageScrollPos;// + this.scrollStep * delta;
 
-        return new Promise((resolve) => {
-          this.syntheticScrollData.postMessage({
-            evType: ev.type,
-            deltaY: Math.round(delta),
-            scrollTop: this.pageScrollPos
-          });
+        const statusPromised1 = new Promise((resolve, reject) => {
+            console.log('2.1 timestamp befor post message', Date.now()); 
+            this.syntheticScrollData.postMessage({
+                evType: ev.type,
+                deltaY: Math.round(delta),
+                scrollTop: this.pageScrollPos
+            });
     
-          // when somebody sends a "BLOCK/DEBLOCK PAGE" message,
-          // we update our blocked state
-          this.pageStatusReciever.addEventListener("message", (ev) => {
-              this.blockedStatus = ev.data.blockedStatus;
-              this.blockerElement = document.getElementById(ev.data.blockerElement);
+            this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
+            // when somebody sends a "BLOCK/DEBLOCK PAGE" message,
+            // we update our blocked state
+            // broadcasters
+            // reciever
+            this.pageStatusReciever.addEventListener("message", (ev) => {
+                console.log('!!!!!!!!!!!!!!!!!!!!!!!! ev.data.blockedStatus :: ', ev.data.blockedStatus);
+                this.blockedStatus = ev.data.blockedStatus;
+                this.offsetTopBlocker = 400;
+                this.blockerElement = document.getElementById(ev.data.blockerElement);
 
-              resolve(this.blockedStatus);
-          });
+                resolve(this.blockedStatus);
+            });//, {once: true});
+
+            // resolve(this.blockedStatus);
         });
+        
+        statusPromised1.then((value) => {
+            console.log(value);
+            // Expected output: "foo"
+        });
+
+        // statusPromised1.reject((value) => {
+        //     console.log(value);
+        //     // Expected output: "foo"
+        // });
+        
+        console.log('!! statusPromised1:: ', statusPromised1);
+
+        // const promiseA = new Promise((resolve, reject) => {
+        //     resolve(777);
+        //   });
+
+        return statusPromised1;
     }
 
     getNewPageScrollPos(ev) {

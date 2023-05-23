@@ -89,18 +89,26 @@ class Deck {
     this.pageStatusSender = new BroadcastChannel("page-scroll-status");
 
     this.syntheticScrollData.onmessage = (ev) => {
+        console.log('timestamp receiver message', Date.now());
         console.log('3. broadcast wait ev data:: ', ev.data);
       this.onEvent(ev.data);
       // another version with dispatch
       //window.dispatchEvent(new CustomEvent('pageMovement', { detail: ev.data }));
     };
+    
 
     window.onload = (ev) => {
         this.getAnimationLength();
+        
+        console.log('pageStatusSender timestamp receiver post message', Date.now());
+        this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus, blockerElement: this.id});
     }
 
     window.onresize = (ev) => {
         this.getAnimationLength();
+
+        console.log('pageStatusSender timestamp receiver post message', Date.now());
+        this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus, blockerElement: this.id});
     } 
   }
 
@@ -162,6 +170,7 @@ class Deck {
 
     console.log('4. Send status:: ', this.deckGlobalStatus);
     // broadcast status
+    console.log('pageStatusSender timestamp receiver post message', Date.now());
     this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus, blockerElement: this.id});
   }
 
@@ -198,12 +207,22 @@ class Deck {
     } else if (this.internalScrollingUp(scrollDistance)) {
       this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
     } else {
-      // animationGlobalStatus changes to 0 if we scroll up or to 2 if we scroll down
-      this.setGlobalStatus(scrollDistance > 0 ? 2 : 0);
-
-      this.currentMovingCardIndex =
-        this.deckGlobalStatus === 0 ? 1 : this.cards.length - 1;
-      this.animationInternalScroll = 0;
+        console.log('STATUS SHOULD CHANGE!');
+        if (scrollDistance > 0) {
+          // animation is done, we scroll down
+          this.setGlobalStatus(2);
+  
+          // index is last acrd
+          this.currentMovingCardIndex = this.cards.length - 1;
+  
+          // set internal scroll to total animation height
+          this.animationInternalScroll = this.animationLength;
+  
+        } else if (scrollDistance < 0) {
+          this.setGlobalStatus(0);
+          this.currentMovingCardIndex = 1;
+          this.animationInternalScroll = 0;
+        }
     }
   }
 
@@ -212,7 +231,7 @@ class Deck {
     console.log('UP this.animationLength:: ', this.animationLength);
     return (
       scrollDistance < 0 &&
-      -this.animationInternalScroll <= this.animationLength
+      this.animationInternalScroll >= 0
     );
   }
 
@@ -231,59 +250,18 @@ class Deck {
 
   updateGlobalStatus(scrollTop, offsetTop, ev) {
 
-    console.log(' 00 scrollTop', scrollTop);
-    console.log('00 offsetTop:: ', offsetTop);
+    // console.log(' 00 scrollTop', scrollTop);
+    // console.log('00 offsetTop:: ', offsetTop);
     console.log('00 this.deckGlobalStatus:: ', this.deckGlobalStatus);
     // console.log('00 document.documentElement.scrollTop:: ', document.documentElement.scrollTop);
     // console.log('00 animation length:: ', (this.totalCardsHeight - GAP * (this.cards.length - 1)));
-    if (ev.deltaY > 0) {
-        if (offsetTop > scrollTop && this.deckGlobalStatus === 1) {
-            console.log('TSAAAA!!!!!!!!!!!!!!!!!AAAT')
-            this.setGlobalStatus(0);    
-        }
-    } else if (ev.deltaY < 0) {
-        if (offsetTop > scrollTop && this.deckGlobalStatus === 1) {
-            console.log('TSAAAAAAAT')
-            this.setGlobalStatus(2);    
-        }    
-    }
-    
-    // if (offsetTop > scrollTop && this.deckGlobalStatus === 1 && ev.deltaY > 0) {
-    //   this.setGlobalStatus(0);
-    // } else  if (offsetTop > scrollTop && this.deckGlobalStatus === 1 && ev.deltaY < 0) {
-    //     this.setGlobalStatus(2); 
-    // } 
+   
     if (
       (offsetTop < scrollTop && this.deckGlobalStatus === 0) ||
       (offsetTop > scrollTop && this.deckGlobalStatus === 2)
     ) {
       this.setGlobalStatus(1);
     } 
-    // else if (offsetTop > scrollTop && this.deckGlobalStatus === 0) 
-    // {
-    //     console.log(scrollTop, " - ", offsetTop);
-    //     if (document.documentElement.scrollTop > (offsetTop + (this.totalCardsHeight - GAP * (this.cards.length - 1)))) {
-    //         console.log('c!!!!!!!!!!!!!!!!!!!!!!!!1 STATUS:: ', 2 );
-    //         this.setGlobalStatus(2);
-    //     } else {
-
-    //         console.log('d!!!!!!!!!!!!!!!!!!!!!!!!!!! STATUS:: ', 1);
-    //         console.log('document.documentElement.scrollTop', document.documentElement.scrollTop);
-    //         console.log('scrollTop', scrollTop);
-    //         console.log('offsetTop:: ', offsetTop);
-    //         console.log('(this.totalCardsHeight - GAP * (this.cards.length - 1))::   ', (this.totalCardsHeight - GAP * (this.cards.length - 1)));
-    //         this.setGlobalStatus(1);     
-    //     }
-    // } else if (offsetTop < scrollTop && this.deckGlobalStatus === 2 )
-    // {
-    //     if (scrollTop < this.containerNode.scrollTop) {
-    //         console.log('e!!!!!!!!!!!!!!!!!!!!!!!!!!! STATUS:: ', 0);
-    //         this.setGlobalStatus(0);
-    //     } else {
-    //         console.log('f!!!!!!!!!!!!!!!!!!!!!!!!!!! STATUS:: ', 1);
-    //         this.setGlobalStatus(1);     
-    //     }    
-    // } 
     else {
         // broadcast status
         console.log('4.1. Send status:: ', this.deckGlobalStatus);
