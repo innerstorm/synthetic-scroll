@@ -90,14 +90,7 @@ class Deck {
     this.pageStatusSender = new BroadcastChannel("page-scroll-status");
 
     this.syntheticScrollData.onmessage = (ev) => {
-        console.log('3. broadcast wait ev data:: ', ev.data);
         this.onEvent(ev.data);
-        
-        if (ev.data.scrollTop < this.offsetTop) {
-            this.setGlobalStatus(0);
-        } else if (ev.data.scrollTop > this.offsetTop + this.animationLength) {
-            this.setGlobalStatus(2);
-        }
       // another version with dispatch
       //window.dispatchEvent(new CustomEvent('pageMovement', { detail: ev.data }));
     };
@@ -170,7 +163,6 @@ class Deck {
         this.deckGlobalStatus = globalStatus;
     }
 
-    console.log('4. Send status:: ', this.deckGlobalStatus);
     // broadcast status
     this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus, blockerElement: this.id});
   }
@@ -184,9 +176,7 @@ class Deck {
   }
 
   updateDeckStatus(ev) {
-    const scrollTop = ev.scrollTop;
-    
-    this.updateGlobalStatus(scrollTop);
+    this.updateGlobalStatus(ev);
     this.deckAnimation(ev);
   }
 
@@ -196,11 +186,10 @@ class Deck {
         this.animationInternalScroll += scrollDistance;
 
         if (this.internalScrollingDown(scrollDistance)) {
-        this.animateCardsScrollDown(this.currentMovingCardIndex, scrollDistance);
+            this.animateCardsScrollDown(this.currentMovingCardIndex, scrollDistance);
         } else if (this.internalScrollingUp(scrollDistance)) {
-        this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
+            this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
         } else {
-            console.log('STATUS SHOULD CHANGE!');
             if (scrollDistance > 0) {
             // animation is done, we scroll down
             this.setGlobalStatus(2);
@@ -212,17 +201,15 @@ class Deck {
             this.animationInternalScroll = this.animationLength;
     
             } else if (scrollDistance < 0) {
-            this.setGlobalStatus(0);
-            this.currentMovingCardIndex = 1;
-            this.animationInternalScroll = 0;
+                this.setGlobalStatus(0);
+                this.currentMovingCardIndex = 1;
+                this.animationInternalScroll = 0;
             }
         }
     }
   }
 
   internalScrollingUp(scrollDistance) {
-    console.log('UP this.animationInternalScroll:: ', this.animationInternalScroll);
-    console.log('UP this.animationLength:: ', this.animationLength);
     return (
       scrollDistance < 0 &&
       this.animationInternalScroll >= 0
@@ -230,23 +217,25 @@ class Deck {
   }
 
   internalScrollingDown(scrollDistance) {
-      console.log('DOWN this.animationInternalScroll:: ', this.animationInternalScroll);
-      console.log('DOWN this.animationLength:: ', this.animationLength);
     return (
       scrollDistance > 0 &&
       this.animationInternalScroll <= this.animationLength
     );
   }
 
-  updateGlobalStatus(scrollTop) {
-    console.log('00 this.deckGlobalStatus:: ', this.deckGlobalStatus);
-
-    if (this.offsetTop < scrollTop && this.deckGlobalStatus === 0 || this.offsetTop > scrollTop && this.deckGlobalStatus === 2) {
+  updateGlobalStatus(ev) {
+    if (this.offsetTop < ev.scrollTop && this.deckGlobalStatus === 0 || this.offsetTop > ev.scrollTop && this.deckGlobalStatus === 2) {
       this.setGlobalStatus(1);
+    } else if (ev.scrollTop < this.offsetTop && this.deckGlobalStatus !== 1) {
+        this.setGlobalStatus(0);
     } 
+    else if (ev.scrollTop > this.offsetTop && this.deckGlobalStatus !== 1) {
+        this.setGlobalStatus(2);
+    }
   }
 
   animateCardsScrollDown(index, scrollDistance) {
+    this.setGlobalStatus(1);
     let movingCard = this.cards[index];
 
     movingCard.setStatus(1);
@@ -269,6 +258,7 @@ class Deck {
   }
 
   animateCardsScrollUp(index, scrollDistance) {
+    this.setGlobalStatus(1);
     let movingCard = this.cards[index];
 
     //When scroll is up, stop card at initialTranslations and change animation status

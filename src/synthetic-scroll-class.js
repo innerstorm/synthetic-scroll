@@ -134,7 +134,6 @@ class SyntheticScroll {
         let delta;
 
         if (ev.type === 'wheel') { 
-            console.log('1. Delta:: ', ev.deltaY);
             delta = ev.deltaY;
         } else {        
             this.newPageScrollPos = this.getNewPageScrollPos(ev);
@@ -146,17 +145,14 @@ class SyntheticScroll {
         try {
            this.blockedStatus = await this.waitForData(ev, delta);
         } catch (error) {
-            console.log("Error occurred:", error);
+            console.error("Error occurred:", error);
         }
-
-        console.log('this.blockedStatus = ', this.blockedStatus);
 
         // the page is not blocked
         if (this.blockedStatus !== 1) {
             // define new page scroll position by wheel delta
             // and a multiplier for better control off scrollspeed
             this.pageScrollPos += this.scrollStep * delta;
-            console.log('5. SCROLLBAR MOVED - this.pageScrollPos', this.pageScrollPos, ' - delta ', delta);
 
             // stop at the top if somehow on earth the position becomes negative (sic!)
             if (this.pageScrollPos < 0) {
@@ -191,10 +187,7 @@ class SyntheticScroll {
 
     // wait for the broadcast communication
     waitForData(ev, delta) {
-        console.log('2. Wait data:: ', ev, delta);
-
         return new Promise((resolve, reject) => {
-            console.log('2.1 timestamp befor post message', Date.now());
             this.syntheticScrollData.postMessage({
                 evType: ev.type,
                 deltaY: Math.round(delta),
@@ -205,16 +198,14 @@ class SyntheticScroll {
             // we update our blocked state
             // broadcasters
             // reciever
-            this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
+            // this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
             
             let newStatus;
             this.pageStatusReciever.addEventListener("message", (ev) => {
-                console.log('!!!!!!!!!!!!!!!!!!!!!!!! ev.data.blockedStatus :: ', ev.data.blockedStatus);
                 newStatus = ev.data.blockedStatus;    
-                console.log('!!!!!newStatus = ', newStatus);  
                 resolve(newStatus);  
             }, {once: true});
-    
+   
             setTimeout(function() {
                 if (!newStatus) {
                   // show notification that evt has not been fired
