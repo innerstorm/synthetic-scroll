@@ -17,7 +17,7 @@ class SyntheticScroll {
       // 1 - stopped
       // 2 - after stopped
       this.blockedStatus = 0;
-      this.offsetTopBlocker = 400;
+      this.offsetTopBlocker;
   
       // variation for scroll speed
       // pageScrollPos += scrollStep * wheelDeltaY;
@@ -59,15 +59,16 @@ class SyntheticScroll {
       // click on scroll box
       this.scrollBox.addEventListener("click", (ev) => this.onScrollBoxClick(ev));
 
-       
       // broadcaster
+      this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
       this.syntheticScrollData = new BroadcastChannel("syntetic-scroll-data");
 
-      this.animationLengthReceiver = new BroadcastChannel("animation-length");
+      this.blockerData = new BroadcastChannel("blocker-data");
 
        //
-       this.animationLengthReceiver.addEventListener("message", (ev) => {
-        this.extraPageHeight = ev.data;
+      this.blockerData.addEventListener("message", (ev) => {
+        this.extraPageHeight = ev.data.extraPageHeight;
+        this.offsetTopBlocker = ev.data.offsetTopBlocker;
       });
     }
   
@@ -143,10 +144,9 @@ class SyntheticScroll {
         }
 
         try {
-            this.blockedStatus = await this.waitForData(ev, delta);
-            console.log('after wait data status ', this.blockedStatus);
+           this.blockedStatus = await this.waitForData(ev, delta);
         } catch (error) {
-            console.error("Error occurred:", error);
+            console.log("Error occurred:", error);
         }
 
         console.log('this.blockedStatus = ', this.blockedStatus);
@@ -191,51 +191,58 @@ class SyntheticScroll {
 
     // wait for the broadcast communication
     waitForData(ev, delta) {
-        console.log('2. Wait data:: ');
+        console.log('2. Wait data:: ', ev, delta);
 
-        const statusPromised1 = new Promise((resolve, reject) => {
-            console.log('2.1 timestamp befor post message', Date.now()); 
+        return new Promise((resolve, reject) => {
+            console.log('2.1 timestamp befor post message', Date.now());
             this.syntheticScrollData.postMessage({
                 evType: ev.type,
                 deltaY: Math.round(delta),
                 scrollTop: this.pageScrollPos
             });
-    
-            this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
+
             // when somebody sends a "BLOCK/DEBLOCK PAGE" message,
             // we update our blocked state
             // broadcasters
             // reciever
+            this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
+            
+            let newStatus;
             this.pageStatusReciever.addEventListener("message", (ev) => {
                 console.log('!!!!!!!!!!!!!!!!!!!!!!!! ev.data.blockedStatus :: ', ev.data.blockedStatus);
-                this.blockedStatus = ev.data.blockedStatus;
-                this.offsetTopBlocker = 400;
-                this.blockerElement = document.getElementById(ev.data.blockerElement);
-
-                resolve(this.blockedStatus);
-            });//, {once: true});
-
-            // resolve(this.blockedStatus);
+                newStatus = ev.data.blockedStatus;    
+                console.log('!!!!!newStatus = ', newStatus);  
+                resolve(newStatus);  
+            }, {once: true});
+    
+            setTimeout(function() {
+                if (!newStatus) {
+                  // show notification that evt has not been fired
+                  reject('no status');   
+                }
+            }, 200);
         });
-        
-        statusPromised1.then((value) => {
-            console.log(value);
-            // Expected output: "foo"
-        });
-
-        // statusPromised1.reject((value) => {
-        //     console.log(value);
-        //     // Expected output: "foo"
-        // });
-        
-        console.log('!! statusPromised1:: ', statusPromised1);
-
-        // const promiseA = new Promise((resolve, reject) => {
-        //     resolve(777);
-        //   });
-
-        return statusPromised1;
     }
+
+
+    // Returns a function, that, as long as it continues to be invoked, will not
+    // be triggered. The function will be called after it stops being called for
+    // N milliseconds. If `immediate` is passed, trigger the function on the
+    // leading edge, instead of the trailing.
+    debounce(func, wait, immediate) {
+        var timeout;
+        return function() {
+            var context = this, args = arguments;
+            var later = function() {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    };
 
     getNewPageScrollPos(ev) {
         return Math.round(this.getScrollRatio(ev) * this.getMaxPageScrollPos());
