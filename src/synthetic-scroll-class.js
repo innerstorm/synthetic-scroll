@@ -1,3 +1,5 @@
+const DELTA_MIN = 10;
+const DELTA_MAX = 500;
 class SyntheticScroll {
     constructor(element) {
       // properties
@@ -159,7 +161,7 @@ class SyntheticScroll {
     onScrollBoxClick(ev) {
       if (ev.target === this.scrollBox) {
         this.getNewData(ev);
-        this.updateAllByMousePosition(ev);
+        // this.updateAllByMousePosition(ev);
       }
     }
 
@@ -169,9 +171,9 @@ class SyntheticScroll {
     }
     
     // document: onTouchEnd
-    onTouchEnd(ev) {
-      window.removeEventListener("touchmove", (ev) => this.onTouchMove(ev));
-    }
+    // onTouchEnd(ev) {
+    //   window.removeEventListener("touchmove", (ev) => this.onTouchMove(ev));
+    // }
 
     // document: onTouchMove
     onTouchMove(event) {
@@ -195,7 +197,23 @@ class SyntheticScroll {
         delta = this.getNewPageScrollPos(ev);
       }
 
-      return delta;
+      if(Math.sign(delta) > 0) {
+        if (delta < DELTA_MIN)
+          delta = DELTA_MIN;
+        if (delta > DELTA_MAX)
+          delta = DELTA_MAX;
+      } else if (Math.sign(delta) < 0) {
+        if (delta > -DELTA_MIN)
+          delta = -DELTA_MIN;
+        if (delta < -DELTA_MAX)
+          delta = -DELTA_MAX;
+      }
+      
+      return Math.round(delta);
+    }
+
+    synteticScrolling(pagePos) {
+      window.scrollTo({ top: pagePos });  
     }
 
     async getNewData(ev) {
@@ -204,41 +222,50 @@ class SyntheticScroll {
         // delta needs to be calculated by deltaY on wheel or by the mouse movement or touch
         let delta = this.calculateDelta(ev);
 
+        console.log('delta:: ', delta);
+
         try {
            this.blockedStatus = await this.waitForData(ev, delta);
         } catch (error) {
-            console.error("Error occurred:", error);
+            console.log("Error occurred:", error);
         }
 
+        console.log('blockedStatus:: ', this.blockedStatus);
         // the page is not blocked
         if (this.blockedStatus !== 1) {
-            // define new page scroll position by wheel delta
-            // and a multiplier for better control off scrollspeed
-            this.pageScrollPos += this.scrollStep * delta;
+          // define new page scroll position by wheel delta
+          // and a multiplier for better control off scrollspeed
+          this.pageScrollPos += this.scrollStep * delta;
 
-            // stop at the top if somehow on earth the position becomes negative (sic!)
-            if (this.pageScrollPos < 0) {
-                this.pageScrollPos = 0;
-            }
+          // stop at the top if somehow on earth the position becomes negative (sic!)
+          if (this.pageScrollPos < 0) {
+              this.pageScrollPos = 0;
+          }
 
-            // also dont let the value get bigger than it shoud
-            if (this.pageScrollPos > this.getMaxPageScrollPos(ev.type)) {
-                this.pageScrollPos = this.getMaxPageScrollPos(ev.type);
-            }
+          // also dont let the value get bigger than it shoud
+          if (this.pageScrollPos > this.getMaxPageScrollPos(ev.type)) {
+              this.pageScrollPos = this.getMaxPageScrollPos(ev.type);
+          }
 
-            // const offsetTopBlocker = this.blockerElement.getBoundingClientRect().top + document.documentElement.scrollTop;
-            if (this.blockedStatus === 0 && this.offsetTopBlocker < this.pageScrollPos) {
-                // finally scroll to the new position
-                window.scrollTo({ top: this.offsetTopBlocker });
-            } else if (this.blockedStatus === 2 && this.offsetTopBlocker > this.pageScrollPos) {
-                // finally scroll to the new position
-                window.scrollTo({ top: this.offsetTopBlocker })
-            } else {
-                window.scrollTo({ top: this.pageScrollPos });
-            }
+          // const offsetTopBlocker = this.blockerElement.getBoundingClientRect().top + document.documentElement.scrollTop;
+          if (this.blockedStatus === 0 && this.offsetTopBlocker < this.pageScrollPos) {
+            // finally scroll to the new position
+            this.synteticScrolling(this.offsetTopBlocker);
+            // if (ev.type === 'click') {
+            //   this.pageScrollPos = this.offsetTopBlocker;
+            // }
+          } else if (this.blockedStatus === 2 && this.offsetTopBlocker > this.pageScrollPos) {
+            // finally scroll to the new position
+            this.synteticScrolling(this.offsetTopBlocker);
+            // if (ev.type === 'click') {
+            //   this.pageScrollPos = this.offsetTopBlocker;
+            // }
+          } else {
+            this.synteticScrolling(this.pageScrollPos);
+          }
 
-            // update scrollbar according new page scroll position
-            this.updateScrollBarPosition(this.pageScrollPos);
+          // update scrollbar according new page scroll position
+          this.updateScrollBarPosition(this.pageScrollPos, ev.type);
         }        
     }
 
@@ -248,7 +275,7 @@ class SyntheticScroll {
       return new Promise((resolve, reject) => {
         this.syntheticScrollData.postMessage({
           evType: ev.type,
-          deltaY: Math.round(delta),
+          deltaY: delta,
           scrollTop: this.pageScrollPos
         });
 
@@ -275,6 +302,10 @@ class SyntheticScroll {
 
     getNewPageScrollPos(ev) {
         return Math.round(this.getScrollRatio(ev) * this.getMaxPageScrollPos(ev.type));
+    }
+
+    getScrollBarPositionAtBlockerOffset() {
+        return this.offsetTopBlocker / this.getMaxPageScrollPos() * scrollBox.offsetHeight;
     }
 
     // calculate scrolling ratio depending on event 
@@ -314,7 +345,13 @@ class SyntheticScroll {
         (newPosPx / this.getMaxPageScrollPos()) *
         (this.scrollBox.offsetHeight - this.scrollBarHeight)
       );
+
+      if (this.scrollBarPosition > this.scrollBox.offsetHeight - this.scrollBarHeight)
+        this.scrollBarPosition = this.scrollBox.offsetHeight - this.scrollBarHeight;
+      if (this.scrollBarPosition < 0)
+        this.scrollBarPosition = 0;
   
+      console.log('this.scrollBarPosition:: ', this.scrollBarPosition);
       // set scrollbar element's new position
       this.applyScrollBarPosition(this.scrollBarPosition);
     }
@@ -340,11 +377,6 @@ class SyntheticScroll {
     // -------
     // set css of the scrollbar pos
     applyScrollBarPosition(posPx) {
-      if (posPx > this.scrollBox.offsetHeight - this.scrollBarHeight)
-        posPx = this.scrollBox.offsetHeight - this.scrollBarHeight;
-      if (posPx < 0)
-        posPx = 0;
-
       this.scrollBar.style.top = `${posPx}px`;
     }
   

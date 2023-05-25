@@ -55,7 +55,7 @@ class Deck {
     this.id = id;
     // 0 - before deck animation, 1 - animation deck, 2 - after life
     this.deckGlobalStatus = 0;
-    this.totalCardsHeight = 0;
+    this.cardsHeight = 0;
     this.animationLength;
     this.containerNode = document.getElementById(id);
     this.offsetTop = 0;
@@ -74,7 +74,9 @@ class Deck {
         this.setFinalTranslations(index);
       });
 
-      this.setTotalCardsHeight();
+      console.log('CARDS:: ', this.cards);
+
+      this.setCardsHeight();
     }
 
     this.mouseButtonPressed = false;
@@ -90,7 +92,8 @@ class Deck {
     this.pageStatusSender = new BroadcastChannel("page-scroll-status");
 
     this.syntheticScrollData.onmessage = (ev) => {
-        this.onEvent(ev.data);
+      console.log(ev.data);
+      this.onEvent(ev.data);
       // another version with dispatch
       //window.dispatchEvent(new CustomEvent('pageMovement', { detail: ev.data }));
     };
@@ -105,11 +108,11 @@ class Deck {
     } 
   }
 
-  setTotalCardsHeight() {
-    this.totalCardsHeight = 0;
-    this.cardElements.forEach((card) => {
-        this.totalCardsHeight += card.offsetHeight;
-    });
+  setCardsHeight() {
+    this.cardsHeight = 0;
+    for (let i = 0; i < this.cardElements.length - 1; i++) {
+      this.cardsHeight += this.cardElements[i].offsetHeight; 
+    }
   }
 
   setOffsetDeck() {
@@ -117,10 +120,10 @@ class Deck {
   }
 
   setAnimationDataAndSendIt() {
-    this.setTotalCardsHeight();
+    this.setCardsHeight();
     this.setOffsetDeck();
 
-    this.animationLength = this.totalCardsHeight - (TOP_DISTANCE + GAP) * (this.cards.length - 1);
+    this.animationLength = this.cardsHeight - (TOP_DISTANCE + GAP) * (this.cards.length - 1);
 
     this.animationDataSender.postMessage({extraPageHeight: this.animationLength, offsetTopBlocker: this.offsetTop});
   }
@@ -131,8 +134,9 @@ class Deck {
     for (let i = 0; i < index; i++) {
       finalTranslation += this.cards[i].cardElement.offsetHeight;
     }
-    finalTranslation += index * (GAP - TOP_DISTANCE);
+    finalTranslation += index * (-GAP - TOP_DISTANCE);
 
+    console.log('finalTranslation : ', finalTranslation);
     // Set final translation on card
     this.cards[index].setFinalTranslation(finalTranslation);
   }
@@ -161,10 +165,25 @@ class Deck {
     // document.body.setAttribute("blocked", globalStatus);
     if (this.deckGlobalStatus !== globalStatus) {
         this.deckGlobalStatus = globalStatus;
+        this.applyCardsPosByStatus(globalStatus);
     }
 
     // broadcast status
-    this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus, blockerElement: this.id});
+    this.pageStatusSender.postMessage({blockedStatus: this.deckGlobalStatus});
+  }
+
+  applyCardsPosByStatus(status) {
+    if (status !== 1) {
+      this.cards.forEach((card, index) => {
+        if (status === 2) {
+          card.setTranslation(-card.getFinalTranslation())
+        } else if (status === 0) {
+          card.setTranslation(card.getInitialTranslation())
+        }
+
+        card.move(card.translation);
+      });
+    }
   }
 
   getGlobalStatus() {
@@ -172,10 +191,6 @@ class Deck {
   }
 
   onEvent(ev) {
-    this.updateDeckStatus(ev);
-  }
-
-  updateDeckStatus(ev) {
     this.updateGlobalStatus(ev);
     this.deckAnimation(ev);
   }
@@ -224,12 +239,13 @@ class Deck {
   }
 
   updateGlobalStatus(ev) {
-    if (this.offsetTop < ev.scrollTop && this.deckGlobalStatus === 0 || this.offsetTop > ev.scrollTop && this.deckGlobalStatus === 2) {
+    console.log('this.offsetTop : ', this.offsetTop, ' - ev.scrollTop : ', ev.scrollTop, ' evType::', ev.evType, ' this.deckGlobalStatus:: ', this.deckGlobalStatus);
+    if (this.offsetTop <= ev.scrollTop && this.deckGlobalStatus === 0 || this.offsetTop >= ev.scrollTop && this.deckGlobalStatus === 2) {
       this.setGlobalStatus(1);
-    } else if (ev.scrollTop < this.offsetTop && this.deckGlobalStatus !== 1) {
+    } else if (this.offsetTop > ev.scrollTop && this.deckGlobalStatus !== 1) {
         this.setGlobalStatus(0);
     } 
-    else if (ev.scrollTop > this.offsetTop && this.deckGlobalStatus !== 1) {
+    else if (this.offsetTop < ev.scrollTop && this.deckGlobalStatus !== 1) {
         this.setGlobalStatus(2);
     }
   }
