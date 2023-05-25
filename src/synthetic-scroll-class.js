@@ -19,7 +19,12 @@ class SyntheticScroll {
     // 1 - stopped
     // 2 - after stopped
     this.blockedStatus = 0;
+
+    // offset in px for the blocker element 
     this.offsetTopBlocker;
+
+    // size of the blocking state in px
+    this.extraPageHeight;
 
     this.startY = 0; // Variable to store initial touch position
     this.scrollTop = 0; // Variable to store initial scroll position
@@ -77,8 +82,6 @@ class SyntheticScroll {
     });
     // on touchstart
     window.addEventListener("touchstart", (ev) => this.onTouchStart(ev));
-    // on touchend
-    window.addEventListener("touchend", (ev) => this.onTouchEnd(ev));
 
     // broadcaster
     this.pageStatusReciever = new BroadcastChannel("page-scroll-status");
@@ -192,6 +195,8 @@ class SyntheticScroll {
         delta = this.scrollTouchStep * (this.oldPageTouchPos - this.newPageTouchPos);
         this.oldPageTouchPos = this.newPageTouchPos;
         break;
+
+
       default:
         delta = this.getNewPageScrollPos(ev);
     }
@@ -220,11 +225,11 @@ class SyntheticScroll {
       console.log("Error occurred:", error);
     }
 
-    this.pageIsNotBlocked(delta, ev);
+    this.updatePageScrollPos(delta, ev);
   }
 
 
-  pageIsNotBlocked(delta, ev) {
+  updatePageScrollPos(delta, ev) {
     if (this.blockedStatus !== 1) {
       // define new page scroll position by wheel delta
       // and a multiplier for better control off scrollspeed
@@ -287,6 +292,25 @@ class SyntheticScroll {
   }
 
   getNewPageScrollPos(ev) {
+    /*
+    // TODO:
+    // above
+    if (desired.pageposition < this.offsetTopBlocker) {
+      newpagepos = actual.pos
+      setDeckState(0)
+    }
+    // below
+    else if (desired.pageposition > this.offsetTopBlocker + this.extraPageHeight) {
+      newpagepos = desired.pageposition
+      setDeckState(2)
+    }
+    else {
+      // inside
+      // we set page pos to beginning of the animation
+      newpagepos = this.offsetTopBlocker
+      setDeckState(1)
+    }
+    */
     return Math.round(this.getScrollRatio(ev) * this.getMaxPageScrollPos(ev.type));
   }
 
