@@ -25,6 +25,7 @@ class SyntheticScroll {
 
     // size of the blocking state in px
     this.extraPageHeight;
+    this.deckHeightOpen;
 
     this.freeScrolling = true;
 
@@ -94,6 +95,7 @@ class SyntheticScroll {
     //
     this.blockerData.addEventListener("message", (ev) => {
       this.extraPageHeight = ev.data.extraPageHeight;
+      this.deckHeightOpen = ev.data.deckHeightOpen;
       this.offsetTopBlocker = ev.data.offsetTopBlocker;
       this.freeScrolling = ev.data.freeScrolling;
     });
@@ -263,20 +265,16 @@ class SyntheticScroll {
   updatePageScrollPosOnClick(delta, ev) {
     this.pageScrollPos += this.scrollStep * delta;
 
-    let newPagePos = this.pageScrollPos;
-
-    const insideAnimation = ( newPagePos > this.offsetTopBlocker) && ( newPagePos < this.offsetTopBlocker + this.extraPageHeight);
-    // const notAboveAnimation = newPagePos > this.offsetTopBlocker;
+    const insideAnimation = ( this.pageScrollPos > this.offsetTopBlocker) && ( this.pageScrollPos < this.offsetTopBlocker + this.deckHeightOpen);
 
     if (this.freeScrolling && insideAnimation) { //|| (!this.freeScrolling && notAboveAnimation)) {
-      newPagePos = this.offsetTopBlocker;
+      this.pageScrollPos = this.offsetTopBlocker;
       // this.freeScrolling = true;
     }
-    
-    window.scrollTo({ top: newPagePos });
+    window.scrollTo({ top: this.pageScrollPos });
 
     // update scrollbar according new page scroll position
-    this.updateScrollBarPosition(newPagePos, ev.type);
+    this.updateScrollBarPosition(this.pageScrollPos, ev.type);
   }
 
   updatePageScrollPos(delta, ev) {

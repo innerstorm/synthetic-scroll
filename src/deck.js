@@ -58,6 +58,7 @@ class Deck {
     this.deckGlobalStatus = 0;
     this.cardsHeight = 0;
     this.animationLength;
+    this.deckHeightOpen;
     this.containerNode = document.getElementById(id);
     this.offsetTop = 0;
     this.cardElements = this.containerNode.querySelectorAll(".card");
@@ -116,8 +117,14 @@ class Deck {
     this.setOffsetDeck();
 
     this.animationLength = this.cardsHeight - (TOP_DISTANCE + GAP) * (this.cards.length - 1);
+    // first card heigth - Gap (card overlaping) + last card heigth + number rest cards * TOP Distance
+    this.deckHeightOpen = this.cardElements[0].offsetHeight - GAP + this.cardElements[this.cards.length - 1].offsetHeight + TOP_DISTANCE * (this.cards.length - 2);
 
-    this.animationDataSender.postMessage({ extraPageHeight: this.animationLength, offsetTopBlocker: this.offsetTop, freeScrolling: FREE_SCROLLING });
+    this.animationDataSender.postMessage({ 
+      extraPageHeight: this.animationLength, 
+      deckHeightOpen: this.deckHeightOpen, 
+      offsetTopBlocker: this.offsetTop, 
+      freeScrolling: FREE_SCROLLING });
   }
 
   // Calculate final translation value - when all cards are closed
@@ -214,9 +221,10 @@ class Deck {
       this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
     }
     else {
-      const animationParams = scrollDistance > 0 ? 2 : 0;
-      this.updateAnimationParams(animationParams);
-      this.setGlobalStatus(animationParams);
+
+      const deckStatus = scrollDistance > 0 ? 2 : 0;
+      this.updateAnimationParams(deckStatus);
+      this.setGlobalStatus(deckStatus);
     }
   }
 
