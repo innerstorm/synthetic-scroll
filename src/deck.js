@@ -220,8 +220,7 @@ class Deck {
     else if (this.internalScrollingUp(scrollDistance)) {
       this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
     }
-    else {
-
+    else if (scrollDistance !== 0) {
       const deckStatus = scrollDistance > 0 ? 2 : 0;
       this.updateAnimationParams(deckStatus);
       this.setGlobalStatus(deckStatus);
@@ -235,14 +234,14 @@ class Deck {
 
   internalScrollingUp(scrollDistance) {
     return (
-      scrollDistance < 0 &&
+      scrollDistance <= 0 &&
       this.animationInternalScroll >= 0
     );
   }
 
   internalScrollingDown(scrollDistance) {
     return (
-      scrollDistance > 0 &&
+      scrollDistance >= 0 &&
       this.animationInternalScroll <= this.animationLength
     );
   }
@@ -265,8 +264,8 @@ class Deck {
   }
 
   updateGlobalStatus(ev) {
-    const comingFromAbove = this.deckGlobalStatus === 0 && this.offsetTop <= ev.scrollTop;
-    const comingFromBelow = this.deckGlobalStatus === 2 && this.offsetTop >= ev.scrollTop;
+    const comingFromAbove = this.deckGlobalStatus === 0 && this.offsetTop < ev.scrollTop;
+    const comingFromBelow = this.deckGlobalStatus === 2 && this.offsetTop > ev.scrollTop;
     if (comingFromAbove || comingFromBelow) {
       this.setGlobalStatus(1);
     } else if (this.deckGlobalStatus !== 1) {

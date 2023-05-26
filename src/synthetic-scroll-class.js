@@ -1,4 +1,4 @@
-const DELTA_MIN = 10;
+const DELTA_MIN = 5;
 const DELTA_MAX = 100;
 class SyntheticScroll {
   constructor(element) {
