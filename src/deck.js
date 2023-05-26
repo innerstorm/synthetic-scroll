@@ -191,7 +191,7 @@ class Deck {
   }
 
   onEvent(ev) {
-    if(ev.evType === 'click' && FREE_SCROLLING){
+    if (ev.evType === 'click' && FREE_SCROLLING) {
       this.updateGlobalStatusOnClick(ev);
     }
     else {
@@ -201,38 +201,28 @@ class Deck {
   }
 
   deckAnimation(ev) {
-    if (this.deckGlobalStatus === 1) {
-      const scrollDistance = ev.deltaY;
-      this.animationInternalScroll += scrollDistance;
+    if (this.deckGlobalStatus !== 1)
+      return;
 
-      if (this.internalScrollingDown(scrollDistance)) {
-        this.animateCardsScrollDown(this.currentMovingCardIndex, scrollDistance);
-      } else if (this.internalScrollingUp(scrollDistance)) {
-        this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
-      } else {
-        if (scrollDistance > 0) {
-          // animation is done, we scroll down
-          this.setGlobalStatus(2);
-          this.updateAnimationParams(2);
+    const scrollDistance = ev.deltaY;
+    this.animationInternalScroll += scrollDistance;
 
-        } else if (scrollDistance < 0) {
-          this.setGlobalStatus(0);
-          this.updateAnimationParams(0);
-        }
-      }
+    if (this.internalScrollingDown(scrollDistance)) {
+      this.animateCardsScrollDown(this.currentMovingCardIndex, scrollDistance);
+    }
+    else if (this.internalScrollingUp(scrollDistance)) {
+      this.animateCardsScrollUp(this.currentMovingCardIndex, scrollDistance);
+    }
+    else {
+      const animationParams = scrollDistance > 0 ? 2 : 0;
+      this.updateAnimationParams(animationParams);
+      this.setGlobalStatus(animationParams);
     }
   }
 
   updateAnimationParams(status) {
-    if (status === 2) {
-      // index is last acrd
-      this.currentMovingCardIndex = this.cards.length - 1;
-      // set internal scroll to total animation height
-      this.animationInternalScroll = this.animationLength;
-    } else if (status === 0) {
-      this.currentMovingCardIndex = 1;
-      this.animationInternalScroll = 0;
-    }
+    this.currentMovingCardIndex = (status === 2) ? (this.cards.length - 1) : 1;
+    this.animationInternalScroll = (status === 2) ? this.animationLength : 0;
   }
 
   internalScrollingUp(scrollDistance) {
@@ -250,27 +240,29 @@ class Deck {
   }
 
   updateGlobalStatusOnClick(ev) {
-    if (ev.scrollTop + ev.deltaY > this.offsetTop + this.animationLength) {
+    const scrollPosition = ev.scrollTop + ev.deltaY;
+    const animationEndPosition = this.offsetTop + this.animationLength;
+
+    if (scrollPosition > animationEndPosition) {
       this.setGlobalStatus(2);
       this.updateAnimationParams(2);
-    } else if (ev.scrollTop + ev.deltaY < this.offsetTop) {
+    } else if (scrollPosition < this.offsetTop) {
       this.setGlobalStatus(0);
       this.updateAnimationParams(0);
     } else {
       this.setGlobalStatus(1);
       this.updateAnimationParams(0);
       this.applyCardsPosByStatus(0);
-    } 
+    }
   }
 
   updateGlobalStatus(ev) {
-    if (this.offsetTop <= ev.scrollTop && this.deckGlobalStatus === 0 || this.offsetTop >= ev.scrollTop && this.deckGlobalStatus === 2) {
+    const comingFromAbove = this.deckGlobalStatus === 0 && this.offsetTop <= ev.scrollTop;
+    const comingFromBelow = this.deckGlobalStatus === 2 && this.offsetTop >= ev.scrollTop;
+    if (comingFromAbove || comingFromBelow) {
       this.setGlobalStatus(1);
-    } else if (this.offsetTop > ev.scrollTop && this.deckGlobalStatus !== 1) {
-      this.setGlobalStatus(0);
-    }
-    else if (this.offsetTop < ev.scrollTop && this.deckGlobalStatus !== 1) {
-      this.setGlobalStatus(2);
+    } else if (this.deckGlobalStatus !== 1) {
+      this.setGlobalStatus(this.offsetTop > ev.scrollTop ? 0 : 2);
     }
   }
 
