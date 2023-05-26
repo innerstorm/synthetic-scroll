@@ -1,5 +1,5 @@
 const DELTA_MIN = 10;
-const DELTA_MAX = 500;
+const DELTA_MAX = 100;
 class SyntheticScroll {
   constructor(element) {
     // properties
@@ -25,6 +25,8 @@ class SyntheticScroll {
 
     // size of the blocking state in px
     this.extraPageHeight;
+
+    this.freeScrolling = true;
 
     this.startY = 0; // Variable to store initial touch position
     this.scrollTop = 0; // Variable to store initial scroll position
@@ -93,6 +95,7 @@ class SyntheticScroll {
     this.blockerData.addEventListener("message", (ev) => {
       this.extraPageHeight = ev.data.extraPageHeight;
       this.offsetTopBlocker = ev.data.offsetTopBlocker;
+      this.freeScrolling = ev.data.freeScrolling;
     });
   }
 
@@ -158,6 +161,24 @@ class SyntheticScroll {
     this.getNewData(event);
   }
 
+  async getNewData(ev) {
+    ev.preventDefault();
+
+    // delta needs to be calculated by deltaY on wheel or by the mouse movement or touch
+    let delta = this.calculateDelta(ev);
+
+    try {
+      this.blockedStatus = await this.waitForData(ev, delta);
+    } catch (error) {
+      console.log("Error occurred:", error);
+    }
+
+    if (ev.type === 'click')
+      this.updatePageScrollPosOnClick(delta, ev);
+    else
+      this.updatePageScrollPos(delta, ev);
+  }
+
   // Calculate delta depending on event:
   // wheel - deltaY
   // mousemove when scrollbar is pressed - diference between new and old ratio of clientY in scrollBox applied to heigth of the document + extraPageHeigth (the heigth of cards animation)
@@ -167,21 +188,10 @@ class SyntheticScroll {
 
     delta = this.adjustDeltaBasedOnEventType(ev, delta);
 
-    delta = this.adjustMinMaxDelta(delta);
+    if (ev.type !== 'click')
+      delta = this.adjustMinMaxDelta(delta);
 
     return Math.round(delta);
-  }
-
-  adjustMinMaxDelta(delta) {
-    const deltaSign = Math.sign(delta);
-
-    if (Math.abs(delta) < DELTA_MIN)
-      delta = deltaSign * DELTA_MIN;
-
-    if (Math.abs(delta) > DELTA_MAX)
-      delta = deltaSign * DELTA_MAX;
-
-    return delta;
   }
 
   adjustDeltaBasedOnEventType(ev, delta) {
@@ -195,63 +205,22 @@ class SyntheticScroll {
         delta = this.scrollTouchStep * (this.oldPageTouchPos - this.newPageTouchPos);
         this.oldPageTouchPos = this.newPageTouchPos;
         break;
-
-
       default:
-        delta = this.getNewPageScrollPos(ev);
+        delta = this.getDeltaByMouseEvent(ev);
     }
     return delta;
   }
 
-  syntheticScrolling() {
-    const aboveAnimation = this.blockedStatus === 0 && this.offsetTopBlocker < this.pageScrollPos;
-    const belowAnimation = this.blockedStatus === 2 && this.offsetTopBlocker > this.pageScrollPos;
-    if (aboveAnimation || belowAnimation)
-      // finally scroll to the new position
-      window.scrollTo({ top: this.offsetTopBlocker });
-    else
-      window.scrollTo({ top: this.pageScrollPos });
-  }
+  adjustMinMaxDelta(delta) {
+    const deltaSign = Math.sign(delta);
 
-  async getNewData(ev) {
-    ev.preventDefault();
+    if (Math.abs(delta) < DELTA_MIN)
+      delta = deltaSign * DELTA_MIN;
 
-    // delta needs to be calculated by deltaY on wheel or by the mouse movement or touch
-    let delta = this.calculateDelta(ev);
+    if (Math.abs(delta) > DELTA_MAX)
+      delta = deltaSign * DELTA_MAX;
 
-    try {
-      this.blockedStatus = await this.waitForData(ev, delta);
-    } catch (error) {
-      console.log("Error occurred:", error);
-    }
-
-    this.updatePageScrollPos(delta, ev);
-  }
-
-
-  updatePageScrollPos(delta, ev) {
-    if (this.blockedStatus !== 1) {
-      // define new page scroll position by wheel delta
-      // and a multiplier for better control off scrollspeed
-      this.pageScrollPos += this.scrollStep * delta;
-
-      this.setMinMaxPageScrollPos(ev);
-
-      this.syntheticScrolling();
-
-      // update scrollbar according new page scroll position
-      this.updateScrollBarPosition(this.pageScrollPos, ev.type);
-    }
-  }
-
-  setMinMaxPageScrollPos(ev) {
-    // stop at the top if somehow on earth the position becomes negative (sic!)
-    if (this.pageScrollPos < 0) {
-      this.pageScrollPos = 0;
-    }  // also dont let the value get bigger than it shoud
-    if (this.pageScrollPos > this.getMaxPageScrollPos(ev.type)) {
-      this.pageScrollPos = this.getMaxPageScrollPos(ev.type);
-    }
+    return delta;
   }
 
   // wait for the broadcast communication
@@ -275,14 +244,6 @@ class SyntheticScroll {
     });
   }
 
-  receiveMessage(newStatus, resolve) {
-    this.pageStatusReciever.addEventListener("message", (ev) => {
-      newStatus = ev.data.blockedStatus;
-      resolve(newStatus);
-    }, { once: true });
-    return newStatus;
-  }
-
   sendMessage(ev, delta) {
     this.syntheticScrollData.postMessage({
       evType: ev.type,
@@ -291,26 +252,69 @@ class SyntheticScroll {
     });
   }
 
-  getNewPageScrollPos(ev) {
-    /*
-    // TODO:
-    // above
-    if (desired.pageposition < this.offsetTopBlocker) {
-      newpagepos = actual.pos
-      setDeckState(0)
+  receiveMessage(newStatus, resolve) {
+    this.pageStatusReciever.addEventListener("message", (ev) => {
+      newStatus = ev.data.blockedStatus;
+      resolve(newStatus);
+    }, { once: true });
+    return newStatus;
+  }
+
+  updatePageScrollPosOnClick(delta, ev) {
+    this.pageScrollPos += this.scrollStep * delta;
+
+    let newPagePos = this.pageScrollPos;
+
+    const insideAnimation = ( newPagePos > this.offsetTopBlocker) && ( newPagePos < this.offsetTopBlocker + this.extraPageHeight);
+    // const notAboveAnimation = newPagePos > this.offsetTopBlocker;
+
+    if (this.freeScrolling && insideAnimation) { //|| (!this.freeScrolling && notAboveAnimation)) {
+      newPagePos = this.offsetTopBlocker;
+      // this.freeScrolling = true;
     }
-    // below
-    else if (desired.pageposition > this.offsetTopBlocker + this.extraPageHeight) {
-      newpagepos = desired.pageposition
-      setDeckState(2)
+    
+    window.scrollTo({ top: newPagePos });
+
+    // update scrollbar according new page scroll position
+    this.updateScrollBarPosition(newPagePos, ev.type);
+  }
+
+  updatePageScrollPos(delta, ev) {
+    if (this.blockedStatus !== 1) {
+      // define new page scroll position by wheel delta
+      // and a multiplier for better control off scrollspeed
+      this.pageScrollPos += this.scrollStep * delta;
+      
+      this.setMinMaxPageScrollPos(ev);
+
+      this.syntheticScrolling();
+
+      // update scrollbar according new page scroll position
+      this.updateScrollBarPosition(this.pageScrollPos, ev.type);
     }
-    else {
-      // inside
-      // we set page pos to beginning of the animation
-      newpagepos = this.offsetTopBlocker
-      setDeckState(1)
+  }
+
+  setMinMaxPageScrollPos(ev) {
+    // stop at the top if somehow on earth the position becomes negative (sic!)
+    if (this.pageScrollPos < 0) {
+      this.pageScrollPos = 0;
+    }  // also dont let the value get bigger than it shoud
+    if (this.pageScrollPos > this.getMaxPageScrollPos(ev.type)) {
+      this.pageScrollPos = this.getMaxPageScrollPos(ev.type);
     }
-    */
+  }
+
+  syntheticScrolling() {
+    const aboveAnimation = this.blockedStatus === 0 && this.offsetTopBlocker < this.pageScrollPos;
+    const belowAnimation = this.blockedStatus === 2 && this.offsetTopBlocker > this.pageScrollPos;
+    if (aboveAnimation || belowAnimation)
+      // finally scroll to the new position
+      window.scrollTo({ top: this.offsetTopBlocker });
+    else
+      window.scrollTo({ top: this.pageScrollPos });
+  }
+
+  getDeltaByMouseEvent(ev) {
     return Math.round(this.getScrollRatio(ev) * this.getMaxPageScrollPos(ev.type));
   }
 
@@ -322,7 +326,10 @@ class SyntheticScroll {
   // on mouse movement we calculate ratio
   getScrollRatio(ev) {
     let ratio = 0;
+
     this.newClientY = ev.clientY;
+    if(ev.type === 'click' && this.freeScrolling)
+      this.oldClientY = this.scrollBar.offsetTop;
 
     const checkMouseEvent = ev.type === 'mousemove' || ev.type === 'click';
     if (checkMouseEvent)

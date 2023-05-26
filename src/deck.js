@@ -1,5 +1,6 @@
 const GAP = 10;
 const TOP_DISTANCE = 40;
+const FREE_SCROLLING = true;
 
 class Card {
   constructor(cardElement, index, translation) {
@@ -116,7 +117,7 @@ class Deck {
 
     this.animationLength = this.cardsHeight - (TOP_DISTANCE + GAP) * (this.cards.length - 1);
 
-    this.animationDataSender.postMessage({ extraPageHeight: this.animationLength, offsetTopBlocker: this.offsetTop });
+    this.animationDataSender.postMessage({ extraPageHeight: this.animationLength, offsetTopBlocker: this.offsetTop, freeScrolling: FREE_SCROLLING });
   }
 
   // Calculate final translation value - when all cards are closed
@@ -172,7 +173,7 @@ class Deck {
 
   applyCardsPosByStatus(status) {
     if (status !== 1) {
-      this.cards.forEach((card, index) => {
+      this.cards.forEach((card) => {
         if (status === 2) {
           card.setTranslation(-card.getFinalTranslation())
         }
@@ -190,8 +191,13 @@ class Deck {
   }
 
   onEvent(ev) {
-    this.updateGlobalStatus(ev);
-    this.deckAnimation(ev);
+    if(ev.evType === 'click' && FREE_SCROLLING){
+      this.updateGlobalStatusOnClick(ev);
+    }
+    else {
+      this.updateGlobalStatus(ev);
+      this.deckAnimation(ev);
+    }
   }
 
   deckAnimation(ev) {
@@ -207,19 +213,25 @@ class Deck {
         if (scrollDistance > 0) {
           // animation is done, we scroll down
           this.setGlobalStatus(2);
-
-          // index is last acrd
-          this.currentMovingCardIndex = this.cards.length - 1;
-
-          // set internal scroll to total animation height
-          this.animationInternalScroll = this.animationLength;
+          this.updateAnimationParams(2);
 
         } else if (scrollDistance < 0) {
           this.setGlobalStatus(0);
-          this.currentMovingCardIndex = 1;
-          this.animationInternalScroll = 0;
+          this.updateAnimationParams(0);
         }
       }
+    }
+  }
+
+  updateAnimationParams(status) {
+    if (status === 2) {
+      // index is last acrd
+      this.currentMovingCardIndex = this.cards.length - 1;
+      // set internal scroll to total animation height
+      this.animationInternalScroll = this.animationLength;
+    } else if (status === 0) {
+      this.currentMovingCardIndex = 1;
+      this.animationInternalScroll = 0;
     }
   }
 
@@ -235,6 +247,20 @@ class Deck {
       scrollDistance > 0 &&
       this.animationInternalScroll <= this.animationLength
     );
+  }
+
+  updateGlobalStatusOnClick(ev) {
+    if (ev.scrollTop + ev.deltaY > this.offsetTop + this.animationLength) {
+      this.setGlobalStatus(2);
+      this.updateAnimationParams(2);
+    } else if (ev.scrollTop + ev.deltaY < this.offsetTop) {
+      this.setGlobalStatus(0);
+      this.updateAnimationParams(0);
+    } else {
+      this.setGlobalStatus(1);
+      this.updateAnimationParams(0);
+      this.applyCardsPosByStatus(0);
+    } 
   }
 
   updateGlobalStatus(ev) {
